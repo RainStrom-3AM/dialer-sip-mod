@@ -21,12 +21,38 @@ public final class PjCall extends Call {
 
     private static final String TAG = "DialerSip";
 
+    /**
+     * Strong references to every live PjCall. A pjsua2 Call object whose Java
+     * wrapper gets garbage-collected runs its native destructor (which calls
+     * hangup) on the GC/finalizer thread - an unregistered pjlib thread -
+     * and aborts the whole app (pj_thread_this assertion). Calls are removed
+     * here only when explicitly delete()d on the pjlib thread post-disconnect.
+     */
+    private static final java.util.Set<PjCall> ACTIVE =
+            java.util.Collections.synchronizedSet(new java.util.HashSet<PjCall>());
+
     private SipConnection connection;
     private int lastState = -1;
     private String cachedRemoteUri = "";
+    private volatile boolean destroyed;
 
     public PjCall(Account acc, int callId) {
         super(acc, callId);
+        ACTIVE.add(this);
+    }
+
+    /** Frees the native call on the pjlib thread once Telecom is done with it. */
+    private static void scheduleDestroy(PjCall c) {
+        PjManager.postDelayed(() -> {
+            ACTIVE.remove(c);
+            c.destroyed = true;
+            try {
+                c.delete();
+                Log.i(TAG, "native call object freed");
+            } catch (Throwable t) {
+                Log.w(TAG, "call delete: " + t);
+            }
+        }, 15000);
     }
 
     /** Caches the remote URI from the pjsip thread; safe to read from any thread. */
@@ -93,7 +119,10 @@ public final class PjCall extends Call {
                         + " reason=" + info.getLastReason()
                         + " remote=" + info.getRemoteUri());
             }
-            if (c == null) return;
+            if (c == null) {
+                if (state == 6) scheduleDestroy(this);
+                return;
+            }
             // PJSIP_INV_STATE_*: 0 NULL, 1 CALLING, 2 INCOMING, 3 EARLY, 4 CONNECTING,
             // 5 CONFIRMED, 6 DISCONNECTED
             switch (state) {
@@ -105,6 +134,7 @@ public final class PjCall extends Call {
                     break;
                 case 6: // DISCONNECTED
                     c.onSipDisconnected();
+                    scheduleDestroy(this);
                     break;
                 default:
                     break;
@@ -116,7 +146,9 @@ public final class PjCall extends Call {
 
     /** Answers an incoming call. Posted: called from Telecom's binder thread. */
     public void sipAnswer() {
+        if (destroyed) return;
         PjManager.post(() -> {
+            if (destroyed) return;
             try {
                 CallOpParam prm = new CallOpParam();
                 prm.setStatusCode(200);
@@ -129,7 +161,9 @@ public final class PjCall extends Call {
 
     /** Declines with BUSY_HERE. Posted. */
     public void sipReject() {
+        if (destroyed) return;
         PjManager.post(() -> {
+            if (destroyed) return;
             try {
                 CallOpParam prm = new CallOpParam();
                 prm.setStatusCode(486);
@@ -142,7 +176,9 @@ public final class PjCall extends Call {
 
     /** Hangs up an active or pending call. Posted. */
     public void sipHangup() {
+        if (destroyed) return;
         PjManager.post(() -> {
+            if (destroyed) return;
             try {
                 CallOpParam prm = new CallOpParam();
                 prm.setStatusCode(0);
@@ -155,7 +191,9 @@ public final class PjCall extends Call {
 
     /** Sends DTMF. Posted. */
     public void sipDtmf(String digits) {
+        if (destroyed) return;
         PjManager.post(() -> {
+            if (destroyed) return;
             try {
                 dialDtmf(digits);
             } catch (Exception e) {

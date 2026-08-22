@@ -44,6 +44,14 @@ public final class PjManager {
         }
     }
 
+    /** Posts delayed work onto the pjlib thread (null-safe, for call cleanup). */
+    static void postDelayed(Runnable r, long delayMillis) {
+        PjManager m = instance;
+        if (m != null) {
+            m.handler.postDelayed(r, delayMillis);
+        }
+    }
+
     /** The pjsua2 Endpoint, or null before startup. */
     static Endpoint endpoint() {
         PjManager m = instance;

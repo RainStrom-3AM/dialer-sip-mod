@@ -26,18 +26,52 @@ public final class SipRegistrationService extends Service {
     private static final int NOTIF_ID = 0x5131;
     private static final String CHANNEL_ID = "dialer_sip_service";
 
-    private static PjCall pendingIncoming;
+    /**
+     * Incoming calls waiting to be claimed by
+     * SipConnectionService.onCreateIncomingConnection.
+     * Written on the pjsip worker thread, read on the main binder thread:
+     * MUST be synchronized - without the happens-before edge the reader can
+     * observe a stale null when stash and take land milliseconds apart
+     * (observed as CREATE_CONNECTION_FAILED -> "Unknown" call log entries).
+     */
+    private static final java.util.ArrayDeque<PjCall> PENDING = new java.util.ArrayDeque<>();
     private ConnectivityManager.NetworkCallback netCallback;
     private boolean running;
 
     static void stashIncomingCall(PjCall call) {
-        pendingIncoming = call;
+        synchronized (PENDING) {
+            PENDING.add(call);
+            Log.i(TAG, "stashed incoming call: " + call.remoteUri()
+                    + " (queue=" + PENDING.size() + ")");
+        }
     }
 
     static PjCall takePendingIncomingCall() {
-        PjCall c = pendingIncoming;
-        pendingIncoming = null;
-        return c;
+        // Fast path first; the queue is normally already populated.
+        synchronized (PENDING) {
+            PjCall c = PENDING.poll();
+            if (c != null) {
+                Log.i(TAG, "claimed incoming call: " + c.remoteUri()
+                        + " (queue=" + PENDING.size() + ")");
+                return c;
+            }
+        }
+        // Rare: stash raced the take (or binder reordering). Poll briefly
+        // before giving up - onCreateIncomingConnection runs on the main
+        // thread and a short bounded wait is safe here.
+        long deadline = android.os.SystemClock.uptimeMillis() + 2000;
+        while (android.os.SystemClock.uptimeMillis() < deadline) {
+            android.os.SystemClock.sleep(100);
+            synchronized (PENDING) {
+                PjCall c = PENDING.poll();
+                if (c != null) {
+                    Log.i(TAG, "claimed incoming call after wait: " + c.remoteUri());
+                    return c;
+                }
+            }
+        }
+        Log.w(TAG, "no pending incoming call after 2s");
+        return null;
     }
 
     public static void start(Context c) {
