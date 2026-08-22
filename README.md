@@ -142,6 +142,27 @@ Non-rooted devices cannot install it: the APK is re-signed, so it can never
 update over Google's Play-Store-installed dialer. The ConnectionService API
 itself does not need root — the system-dialer *replacement* does.
 
+## Non-rooted variant (standalone app)
+
+`DialerSIP-standalone` is the same SIP stack shipped as a **normal
+installable app** (`com.rainstrom.dialersip`) — no root, no Magisk, no
+replacement of the system dialer. It uses the public Telecom
+ConnectionService API, so SIP calls still ring through the stock dialer's
+in-call UI, appear in the system call log, and the SIP account shows up in
+the Settings -> Calling accounts chooser next to your SIMs.
+
+Differences from the rooted mod:
+- No dialpad-overflow menu entry inside the system dialer (that patch
+  modifies dialer code) — the app's own icon/notification/shortcuts are
+  the entry points.
+- The SIP PhoneAccount is not auto-enabled (that needs a privileged
+  permission): flip it on once under Settings -> Calling accounts.
+- Built from the same sources; the dialer's dex set is bundled as the
+  Material/appcompat runtime.
+
+Tested on Android 16 alongside the stock dialer: registration, outgoing,
+incoming with caller ID, stock in-call UI.
+
 ## FAQ
 
 **Will Play Store updates break it?** The Play Store can't update a

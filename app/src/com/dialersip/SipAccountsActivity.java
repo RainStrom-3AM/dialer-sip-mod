@@ -407,7 +407,12 @@ public final class SipAccountsActivity extends Activity {
     }
 
     private int res(String name, String type) {
-        return getResources().getIdentifier(name, type, getPackageName());
+        int id = getResources().getIdentifier(name, type, getPackageName());
+        if (id == 0) {
+            // standalone build: resources stay keyed to the original package
+            id = getResources().getIdentifier(name, type, "com.google.android.dialer");
+        }
+        return id;
     }
 
     /** Resolves a theme attribute (e.g. selectableItemBackgroundBorderless) to a res id. */

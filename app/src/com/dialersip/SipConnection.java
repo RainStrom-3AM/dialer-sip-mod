@@ -104,6 +104,15 @@ public final class SipConnection extends Connection {
     }
 
     private void applyAudioRoute(int route) {
+        // setCommunicationDevice needs API 31; guard for minSdk 30 devices
+        try {
+            applyAudioRouteInner(route);
+        } catch (Throwable t) {
+            android.util.Log.w("DialerSip", "audio route: " + t);
+        }
+    }
+
+    private void applyAudioRouteInner(int route) {
         android.media.AudioManager am = (android.media.AudioManager)
                 context.getSystemService(android.content.Context.AUDIO_SERVICE);
         if (am == null) return;
