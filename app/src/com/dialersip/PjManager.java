@@ -80,6 +80,7 @@ public final class PjManager {
 
     private PjManager(Context appContext) {
         context = appContext.getApplicationContext();
+        AppContext.set(context);
         thread = new HandlerThread("pjsip-main");
         thread.start();
         handler = new Handler(thread.getLooper());

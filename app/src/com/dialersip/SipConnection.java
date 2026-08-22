@@ -96,48 +96,12 @@ public final class SipConnection extends Connection {
 
     // ---- Audio ----
 
-    // ---- Audio routing (speaker / earpiece / wired / bluetooth) ----
-
-    @Override
-    public void onCallAudioStateChanged(android.telecom.CallAudioState state) {
-        applyAudioRoute(state.getRoute());
-    }
-
-    private void applyAudioRoute(int route) {
-        android.media.AudioManager am = (android.media.AudioManager)
-                context.getSystemService(android.content.Context.AUDIO_SERVICE);
-        if (am == null) return;
-        int wanted;
-        switch (route) {
-            case android.telecom.CallAudioState.ROUTE_SPEAKER:
-                wanted = android.media.AudioDeviceInfo.TYPE_BUILTIN_SPEAKER;
-                break;
-            case android.telecom.CallAudioState.ROUTE_EARPIECE:
-                wanted = android.media.AudioDeviceInfo.TYPE_BUILTIN_EARPIECE;
-                break;
-            case android.telecom.CallAudioState.ROUTE_WIRED_HEADSET:
-            case android.telecom.CallAudioState.ROUTE_WIRED_OR_EARPIECE:
-                wanted = android.media.AudioDeviceInfo.TYPE_WIRED_HEADSET;
-                break;
-            case android.telecom.CallAudioState.ROUTE_BLUETOOTH:
-                wanted = android.media.AudioDeviceInfo.TYPE_BLUETOOTH_SCO;
-                break;
-            default:
-                return;
-        }
-        for (android.media.AudioDeviceInfo d : am.getAvailableCommunicationDevices()) {
-            if (d.getType() == wanted
-                    || (wanted == android.media.AudioDeviceInfo.TYPE_WIRED_HEADSET
-                        && d.getType() == android.media.AudioDeviceInfo.TYPE_WIRED_HEADPHONES)) {
-                if (am.setCommunicationDevice(d)) {
-                    android.util.Log.i("DialerSip", "audio route -> type " + d.getType());
-                    return;
-                }
-            }
-        }
-        // Fallback for devices without communication-device routing.
-        am.setSpeakerphoneOn(route == android.telecom.CallAudioState.ROUTE_SPEAKER);
-    }
+    // ---- Audio ----
+    // NOTE: audio routing (speaker/earpiece/wired/Bluetooth) is handled entirely
+    // by Telecom's CallAudioRouteController for managed connections. Applying
+    // setCommunicationDevice() ourselves races Telecom's own application,
+    // re-triggers its onCommunicationDeviceChanged state machine and makes the
+    // speaker toggle snap back to earpiece. Do NOT route from here.
 
     private void setupAudio() {
         if (audioSetup) return;

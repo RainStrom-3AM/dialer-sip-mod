@@ -70,6 +70,9 @@ public final class PjCall extends Call {
                     callMedia.adjustRxLevel(1.5f);
                     callMedia.adjustTxLevel(1.2f);
                     Log.i(TAG, "audio bridged (media #" + i + ")");
+                    if (CallRecording.enabled(AppContext.get())) {
+                        CallRecording.startSip(callMedia, ep);
+                    }
                 } catch (Exception e) {
                     Log.e(TAG, "bridge media #" + i + " failed", e);
                 }
@@ -104,6 +107,7 @@ public final class PjCall extends Call {
                     c.onSipActive();
                     break;
                 case 6: // DISCONNECTED
+                    CallRecording.stopSip();
                     c.onSipDisconnected();
                     break;
                 default:

@@ -10,7 +10,7 @@ import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
-import android.widget.CheckBox;
+import android.content.Intent;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -29,7 +29,7 @@ public final class SipAccountsActivity extends Activity {
     private EditText authUser;
     private EditText password;
     private EditText port;
-    private CheckBox receive;
+    private com.google.android.material.materialswitch.MaterialSwitch receive;
     private android.widget.RadioGroup transport;
 
     @Override
@@ -77,10 +77,23 @@ public final class SipAccountsActivity extends Activity {
         if (SipAccountStore.transport(this) == 1) tcp.setChecked(true); else udp.setChecked(true);
         root.addView(transport, wrap());
 
-        receive = new CheckBox(this);
+        receive = new com.google.android.material.materialswitch.MaterialSwitch(this);
         receive.setText("Receive incoming calls (keeps registration alive)");
         receive.setChecked(SipAccountStore.receiveCalls(this));
         root.addView(receive, wrap());
+
+        com.google.android.material.materialswitch.MaterialSwitch record =
+                new com.google.android.material.materialswitch.MaterialSwitch(this);
+        record.setText("Record all calls");
+        record.setChecked(CallRecording.enabled(this));
+        record.setOnCheckedChangeListener((b, checked) -> CallRecording.setEnabled(this, checked));
+        root.addView(record, wrap());
+
+        Button more = new Button(this);
+        more.setText("More options");
+        more.setOnClickListener(v ->
+                startActivity(new Intent(this, MoreOptionsActivity.class)));
+        root.addView(more, wrap());
 
         Button save = new Button(this);
         save.setText("Save");
