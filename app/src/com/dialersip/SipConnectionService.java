@@ -115,8 +115,75 @@ public final class SipConnectionService extends ConnectionService {
         }
         conn.attach(call);
         call.setConnection(conn);
-        conn.setAddress(Uri.parse(call.remoteUri()), TelecomManager.PRESENTATION_ALLOWED);
+        android.net.Uri caller = callerAddress(call.remoteUri());
+        Log.i(TAG, "incoming caller: raw=" + call.remoteUri() + " -> " + caller);
+        conn.setAddress(caller, TelecomManager.PRESENTATION_ALLOWED);
+        String name = callerDisplayName(call.remoteUri());
+        if (name != null) conn.setCallerDisplayName(name, TelecomManager.PRESENTATION_ALLOWED);
         conn.setRinging();
         return conn;
+    }
+
+    /**
+     * pjsua2's CallInfo.getRemoteUri() returns the raw From header value, e.g.
+     *   "JoY" &lt;sip:JoY@host&gt;;tag=abc   or   &lt;sip:1000000000@host&gt;;tag=abc
+     * Uri.parse() on that string yields a scheme-less invalid Uri, which Telecom
+     * renders as "Unknown". Extract the sip: URI, split user@host, and hand
+     * Telecom a clean tel: URI for phone-number callers (matches contacts and
+     * the call log) or sip: URI for SIP usernames.
+     */
+    static android.net.Uri callerAddress(String remoteUri) {
+        String user;
+        String host = "";
+        String s = remoteUri == null ? "" : remoteUri;
+        int i = indexOfScheme(s);
+        if (i >= 0) {
+            String uri = s.substring(i);
+            for (int k = 0; k < uri.length(); k++) {
+                char c = uri.charAt(k);
+                if (c == ';' || c == '>' || c == ' ' || c == '"' || c == '<') {
+                    uri = uri.substring(0, k);
+                    break;
+                }
+            }
+            int colon = uri.indexOf(':');
+            int at = uri.indexOf('@');
+            user = at > 0 ? uri.substring(colon + 1, at) : uri.substring(colon + 1);
+            if (at > 0) host = uri.substring(at + 1);
+        } else {
+            user = s.trim();
+        }
+        int semi = user.indexOf(';');
+        if (semi >= 0) user = user.substring(0, semi);
+        user = Uri.decode(user.trim());
+        if (user.isEmpty()) return Uri.parse("sip:unknown@unknown");
+
+        // phone-number-like caller (digits, +, *, #, separators) -> tel: URI
+        if (user.matches("[+]?[0-9*# \\-()]+")) {
+            return Uri.parse("tel:" + Uri.encode(user));
+        }
+        return Uri.parse("sip:" + Uri.encode(user) + "@" + (host.isEmpty() ? "unknown" : host));
+    }
+
+    /** Display name from the raw remote URI, e.g. "JoY" from "JoY" &lt;sip:...&gt;. */
+    static String callerDisplayName(String remoteUri) {
+        String s = remoteUri == null ? "" : remoteUri;
+        int lt = s.indexOf('<');
+        if (lt > 0) {
+            String name = s.substring(0, lt).replace("\"", "").trim();
+            if (!name.isEmpty()) return name;
+        }
+        return null;
+    }
+
+    private static int indexOfScheme(String s) {
+        int a = s.indexOf("sip:");
+        int b = s.indexOf("sips:");
+        int c = s.indexOf("tel:");
+        int best = -1;
+        if (a >= 0) best = a;
+        if (b >= 0 && (best < 0 || b < best)) best = b;
+        if (c >= 0 && (best < 0 || c < best)) best = c;
+        return best;
     }
 }
