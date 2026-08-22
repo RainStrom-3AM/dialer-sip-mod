@@ -20,12 +20,15 @@ find "$BINDINGS" -name "*.java" >> "$WORK/sources.txt"
 sed -i 's|^/e/|E:/|' "$WORK/sources.txt"
 echo "sources: $(wc -l < "$WORK/sources.txt")"
 
-# 2. compile (Java 8 bytecode; android.jar on classpath — JDK bootclasspath provides
-#    LambdaMetafactory, d8 at min-api 30 keeps invokedynamic natively)
+# 2. compile (Java 8 bytecode; classpath = framework + bundled material/androidx
+#    AAR classes for compile-time resolution - runtime resolves inside the APK dex.
+#    Multi-path classpath goes through an @argfile with E:/ paths to dodge MSYS mangling.)
+CP="$(cygpath -m "$ANDROID_JAR");$(cygpath -m "$TOOLS/material-classes/classes.jar");$(cygpath -m "$TOOLS/material-classes")"
+printf -- '-cp "%s"\n' "$CP" > "$WORK/javac.args"
 "$JDK/bin/javac.exe" -source 8 -target 8 \
   -Xlint:-options \
-  -cp "$ANDROID_JAR" \
   -nowarn -encoding UTF-8 \
+  @"$WORK/javac.args" \
   -d "$WORK/classes" \
   @"$WORK/sources.txt"
 

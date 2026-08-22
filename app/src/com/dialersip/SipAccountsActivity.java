@@ -4,115 +4,229 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.DialogInterface;
+import android.graphics.Typeface;
 import android.os.Bundle;
 import android.text.InputType;
+import android.util.TypedValue;
+import android.view.ContextThemeWrapper;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.Button;
-import android.widget.CheckBox;
-import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.google.android.material.button.MaterialButton;
+import com.google.android.material.materialswitch.MaterialSwitch;
+import com.google.android.material.textfield.TextInputEditText;
+import com.google.android.material.textfield.TextInputLayout;
+
 /**
  * SIP account management: create, edit, and delete the profile.
- * Deliberately built with plain programmatic views: no layout resources,
- * no androidx, so it splices into the decompiled APK without resource-ID surgery.
+ * Built with the app's bundled Material 3 components under Theme.DialerSip
+ * (Google-blue palette, DayNight) so it matches the dialer's own settings.
+ * Views are constructed programmatically - no layout resource IDs needed -
+ * referencing bundled classes and styles by name at runtime.
  */
 public final class SipAccountsActivity extends Activity {
 
-    private EditText server;
-    private EditText username;
-    private EditText authUser;
-    private EditText password;
-    private EditText port;
-    private CheckBox receive;
-    private android.widget.RadioGroup transport;
-    private Button saveButton;
-    private Button deleteButton;
-    private TextView statusHeader;
+    private TextInputEditText server;
+    private TextInputEditText username;
+    private TextInputEditText authUser;
+    private TextInputEditText password;
+    private TextInputEditText port;
+    private MaterialSwitch receive;
+    private MaterialButton udpBtn;
+    private MaterialButton tcpBtn;
+    private boolean tcpSelected;
+    private MaterialButton saveButton;
+    private MaterialButton deleteButton;
+    private TextView statusTitle;
+    private TextView statusDetail;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
         ScrollView scroll = new ScrollView(this);
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        int pad = dp(16);
-        root.setPadding(pad, pad, pad, dp(80));
-        scroll.addView(root);
+        // edge-to-edge is enforced at this targetSdk: pad the root for system bars
+        scroll.setFitsSystemWindows(true);
+        LinearLayout root = vertical();
+        scroll.addView(root, new ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        setContentView(scroll);
 
-        statusHeader = new TextView(this);
-        statusHeader.setTextSize(14);
-        statusHeader.setPadding(0, 0, 0, dp(12));
-        root.addView(statusHeader, wrap());
+        // top app bar built from framework views only: MaterialToolbar's
+        // setTitle/setNavigationIcon live in the R8-renamed support Toolbar super
+        // and cannot be invoked from spliced code
+        LinearLayout bar = new LinearLayout(this);
+        bar.setOrientation(LinearLayout.HORIZONTAL);
+        bar.setGravity(Gravity.CENTER_VERTICAL);
+        bar.setPadding(dp(6), dp(10), dp(16), dp(6));
 
-        root.addView(title("SIP account"));
+        android.widget.ImageButton back = new android.widget.ImageButton(this);
+        int backRes = res("sip_ic_back", "drawable");
+        if (backRes != 0) {
+            android.graphics.drawable.Drawable d =
+                    getDrawable(backRes);
+            if (d != null) {
+                d = d.mutate();
+                d.setTint(attrColor("colorOnSurface"));
+                back.setImageDrawable(d);
+            }
+        }
+        int ripple = attrResId("selectableItemBackgroundBorderless");
+        if (ripple != 0) back.setBackgroundResource(ripple);
+        back.setOnClickListener(v -> finish());
+        LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(dp(48), dp(48));
+        bl.gravity = Gravity.CENTER_VERTICAL;
+        bar.addView(back, bl);
 
-        server = field(root, "Server / registrar host", InputType.TYPE_CLASS_TEXT
-                | InputType.TYPE_TEXT_VARIATION_URI);
+        LinearLayout titles = vertical();
+        TextView barTitle = new TextView(this);
+        barTitle.setText("SIP account");
+        barTitle.setTextSize(20);
+        barTitle.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        barTitle.setTextColor(attrColor("colorOnSurface"));
+        titles.addView(barTitle, matchWrap());
+        TextView barSub = new TextView(this);
+        barSub.setText("Internet calling");
+        barSub.setTextSize(13);
+        barSub.setTextColor(attrColor("colorOnSurfaceVariant"));
+        titles.addView(barSub, matchWrap());
+        bar.addView(titles, new LinearLayout.LayoutParams(0,
+                ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+        root.addView(bar, matchWrap());
+
+        LinearLayout body = vertical();
+        int pad = dp(20);
+        body.setPadding(pad, dp(4), pad, dp(24));
+        root.addView(body, matchWrap());
+
+        // ---- status card (M3 filled-card look: rounded, surfaceContainerHighest) ----
+        LinearLayout card = vertical();
+        android.graphics.drawable.GradientDrawable cardBg = new android.graphics.drawable.GradientDrawable();
+        cardBg.setColor(attrColor("colorSurfaceContainerHighest"));
+        cardBg.setCornerRadius(dp(16));
+        card.setBackground(cardBg);
+        card.setPadding(dp(18), dp(14), dp(18), dp(14));
+
+        statusTitle = new TextView(this);
+        statusTitle.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        statusTitle.setTextSize(15);
+        statusTitle.setTextColor(attrColor("colorOnSurface"));
+        card.addView(statusTitle, matchWrap());
+
+        statusDetail = new TextView(this);
+        statusDetail.setTextSize(13);
+        statusDetail.setTextColor(attrColor("colorOnSurfaceVariant"));
+        LinearLayout.LayoutParams dl = matchWrap();
+        dl.topMargin = dp(2);
+        card.addView(statusDetail, dl);
+
+        LinearLayout.LayoutParams cl = matchWrap();
+        cl.topMargin = dp(16);
+        cl.bottomMargin = dp(4);
+        body.addView(card, cl);
+
+        // ---- account fields ----
+        body.addView(sectionLabel("Account details"));
+
+        server = editText(body,
+                input(),
+                "Server address",
+                InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
         server.setText(SipAccountStore.server(this));
 
-        username = field(root, "Username (SIP user)", InputType.TYPE_CLASS_TEXT);
+        username = editText(body,
+                input(),
+                "Username",
+                InputType.TYPE_CLASS_TEXT);
         username.setText(SipAccountStore.username(this));
 
-        authUser = field(root, "Auth username (optional, defaults to username)",
+        authUser = editText(body,
+                input(),
+                "Auth username (optional)",
                 InputType.TYPE_CLASS_TEXT);
         authUser.setText(SipAccountStore.authUser(this));
 
-        password = field(root, "Password", InputType.TYPE_CLASS_TEXT
-                | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        password = editText(body,
+                input(),
+                "Password",
+                InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
         password.setText(SipAccountStore.password(this));
 
-        port = field(root, "Port (default 5060)", InputType.TYPE_CLASS_NUMBER);
+        port = editText(body,
+                input(),
+                "Port",
+                InputType.TYPE_CLASS_NUMBER);
         port.setText(String.valueOf(SipAccountStore.port(this)));
 
-        root.addView(label("Transport"));
-        transport = new android.widget.RadioGroup(this);
-        transport.setOrientation(LinearLayout.HORIZONTAL);
-        android.widget.RadioButton udp = new android.widget.RadioButton(this);
-        udp.setId(View.generateViewId());
-        udp.setText("UDP");
-        android.widget.RadioButton tcp = new android.widget.RadioButton(this);
-        tcp.setId(View.generateViewId());
-        tcp.setText("TCP");
-        transport.addView(udp);
-        transport.addView(tcp);
-        if (SipAccountStore.transport(this) == 1) tcp.setChecked(true); else udp.setChecked(true);
-        root.addView(transport, wrap());
+        // ---- transport (segmented buttons, painted manually: the toggle group's
+        //      setSingleSelection/selection APIs were renamed away by R8) ----
+        body.addView(sectionLabel("Transport"));
+        LinearLayout seg = new LinearLayout(this);
+        seg.setOrientation(LinearLayout.HORIZONTAL);
+        android.graphics.drawable.GradientDrawable segBg =
+                new android.graphics.drawable.GradientDrawable();
+        segBg.setStroke(dp(1), attrColor("colorOutline"));
+        segBg.setCornerRadius(dp(20));
+        seg.setBackground(segBg);
+        seg.setPadding(dp(3), dp(3), dp(3), dp(3));
+        tcpSelected = SipAccountStore.transport(this) == 1;
+        udpBtn = segButton("UDP");
+        tcpBtn = segButton("TCP");
+        udpBtn.setOnClickListener(v -> { tcpSelected = false; paintSeg(); });
+        tcpBtn.setOnClickListener(v -> { tcpSelected = true; paintSeg(); });
+        seg.addView(udpBtn, new LinearLayout.LayoutParams(0,
+                ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        seg.addView(tcpBtn, new LinearLayout.LayoutParams(0,
+                ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        paintSeg();
+        LinearLayout.LayoutParams gl = matchWrap();
+        gl.topMargin = dp(4);
+        body.addView(seg, gl);
 
-        receive = new CheckBox(this);
-        receive.setText("Receive incoming calls (keeps registration alive)");
+        // ---- incoming calls ----
+        receive = new MaterialSwitch(this);
+        receive.setText("Receive incoming calls");
         receive.setChecked(SipAccountStore.receiveCalls(this));
-        root.addView(receive, wrap());
+        LinearLayout.LayoutParams rl = matchWrap();
+        rl.topMargin = dp(20);
+        body.addView(receive, rl);
 
-        saveButton = new Button(this);
+        TextView cap = caption("Keep the SIP registration alive so incoming calls ring on this phone.");
+        body.addView(cap);
+
+        // ---- actions ----
+        saveButton = new MaterialButton(this);
+        saveButton.setMinHeight(dp(48));
         saveButton.setOnClickListener(v -> save());
-        root.addView(saveButton, wrap());
+        LinearLayout.LayoutParams sl = matchWrap();
+        sl.topMargin = dp(28);
+        body.addView(saveButton, sl);
 
-        deleteButton = new Button(this);
+        deleteButton = styledButton("ThemeOverlay.DialerSip.OutlinedButton");
         deleteButton.setText("Delete account");
         deleteButton.setOnClickListener(v -> confirmDelete());
-        root.addView(deleteButton, wrap());
+        LinearLayout.LayoutParams dsl = matchWrap();
+        dsl.topMargin = dp(8);
+        body.addView(deleteButton, dsl);
 
-        Button stop = new Button(this);
+        MaterialButton stop = styledButton("ThemeOverlay.DialerSip.TextButton");
         stop.setText("Stop SIP service (keep account)");
         stop.setOnClickListener(v -> {
             SipRegistrationService.stop(this);
             Toast.makeText(this, "SIP service stopped", Toast.LENGTH_SHORT).show();
+            refreshMode();
         });
-        root.addView(stop, wrap());
-
-        root.addView(hint("Calls are placed from the persistent SIP notification "
-                + "or the launcher shortcut \"New SIP call\". The SIP account also "
-                + "appears under Settings > Calling accounts for enabling/disabling."));
+        LinearLayout.LayoutParams stl = matchWrap();
+        stl.topMargin = dp(4);
+        body.addView(stop, stl);
 
         refreshMode();
-        setContentView(scroll);
     }
 
     /** Switch labels/header between "no account yet" and "editing existing account". */
@@ -122,12 +236,18 @@ public final class SipAccountsActivity extends Activity {
         deleteButton.setEnabled(configured);
         deleteButton.setAlpha(configured ? 1f : 0.4f);
         if (configured) {
-            statusHeader.setText("Account: " + SipAccountStore.username(this)
-                    + "@" + SipAccountStore.server(this)
-                    + "  (" + (SipAccountStore.transport(this) == 1 ? "TCP" : "UDP")
-                    + ", port " + SipAccountStore.port(this) + ")");
+            statusTitle.setText(SipAccountStore.username(this) + "@" + SipAccountStore.server(this));
+            boolean running = false;
+            try {
+                running = PjManager.get(this).isStarted();
+            } catch (Throwable ignored) {
+            }
+            statusDetail.setText((SipAccountStore.transport(this) == 1 ? "TCP" : "UDP")
+                    + ", port " + SipAccountStore.port(this)
+                    + "  \u2022  " + (running ? "Service running" : "Service stopped"));
         } else {
-            statusHeader.setText("No SIP account configured — enter details below.");
+            statusTitle.setText("No SIP account");
+            statusDetail.setText("Enter your SIP details below to add an account.");
         }
     }
 
@@ -146,7 +266,7 @@ public final class SipAccountsActivity extends Activity {
         }
         SipAccountStore.save(this, srv, usr, authUser.getText().toString(),
                 password.getText().toString(), p,
-                transport.indexOfChild(transport.findViewById(transport.getCheckedRadioButtonId())) == 1 ? 1 : 0,
+                tcpSelected ? 1 : 0,
                 receive.isChecked());
         SipConnectionService.ensurePhoneAccount(this);
         if (SipAccountStore.receiveCalls(this)) {
@@ -185,48 +305,128 @@ public final class SipAccountsActivity extends Activity {
         password.setText("");
         port.setText("5060");
         receive.setChecked(false);
+        tcpSelected = false;
+        paintSeg();
         refreshMode();
         Toast.makeText(this, "SIP account deleted", Toast.LENGTH_SHORT).show();
     }
 
-    // ---- tiny view helpers ----
+    // ---- tiny view helpers (Material 3) ----
 
-    private TextView title(String text) {
+    private LinearLayout vertical() {
+        LinearLayout l = new LinearLayout(this);
+        l.setOrientation(LinearLayout.VERTICAL);
+        return l;
+    }
+
+    private LinearLayout.LayoutParams matchWrap() {
+        return new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+    }
+
+    private TextView sectionLabel(String text) {
         TextView t = new TextView(this);
         t.setText(text);
-        t.setTextSize(20);
-        t.setGravity(Gravity.START);
-        t.setPadding(0, 0, 0, dp(12));
+        t.setTextSize(13);
+        t.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        t.setTextColor(attrColor("colorPrimary"));
+        LinearLayout.LayoutParams lp = matchWrap();
+        lp.topMargin = dp(18);
+        lp.bottomMargin = dp(6);
+        t.setLayoutParams(lp);
         return t;
     }
 
-    private TextView label(String text) {
+    private TextView caption(String text) {
         TextView t = new TextView(this);
         t.setText(text);
-        t.setPadding(0, dp(10), 0, dp(4));
+        t.setTextSize(12.5f);
+        t.setTextColor(attrColor("colorOnSurfaceVariant"));
+        LinearLayout.LayoutParams lp = matchWrap();
+        lp.topMargin = dp(2);
+        lp.leftMargin = dp(4);
+        t.setLayoutParams(lp);
         return t;
     }
 
-    private TextView hint(String text) {
-        TextView t = new TextView(this);
-        t.setText(text);
-        t.setTextSize(12);
-        t.setPadding(0, dp(16), 0, 0);
-        return t;
-    }
-
-    private EditText field(LinearLayout root, String hint, int inputType) {
-        root.addView(label(hint));
-        EditText e = new EditText(this);
-        e.setInputType(inputType);
+    /** A filled-box text field; the floating label is set on the EditText because
+     *  TextInputLayout.setHint was renamed away by R8 - the layout adopts the
+     *  child's hint on attach. Returns the inner edit text. */
+    private TextInputEditText editText(LinearLayout root, TextInputLayout layout,
+                                       String hint, int inputType) {
+        root.addView(layout, matchWrap());
+        TextInputEditText e = new TextInputEditText(layout.getContext());
         e.setSingleLine(true);
-        root.addView(e, wrap());
+        e.setInputType(inputType);
+        e.setHint(hint);
+        layout.addView(e, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         return e;
     }
 
-    private LinearLayout.LayoutParams wrap() {
-        return new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+    private TextInputLayout input() {
+        TextInputLayout l = new TextInputLayout(this);
+        LinearLayout.LayoutParams lp = matchWrap();
+        lp.topMargin = dp(10);
+        l.setLayoutParams(lp);
+        return l;
+    }
+
+    private MaterialButton segButton(String text) {
+        MaterialButton b = new MaterialButton(this);
+        b.setText(text);
+        b.setMinHeight(dp(40));
+        b.setElevation(0);
+        return b;
+    }
+
+    /** Paints the UDP/TCP segment: filled pill on the selected side. */
+    private void paintSeg() {
+        paintSegSide(udpBtn, !tcpSelected);
+        paintSegSide(tcpBtn, tcpSelected);
+    }
+
+    private void paintSegSide(MaterialButton b, boolean selected) {
+        android.graphics.drawable.GradientDrawable bg =
+                new android.graphics.drawable.GradientDrawable();
+        bg.setCornerRadius(dp(18));
+        if (selected) {
+            bg.setColor(attrColor("colorPrimary"));
+            b.setTextColor(attrColor("colorOnPrimary"));
+        } else {
+            bg.setColor(0x00000000);
+            b.setTextColor(attrColor("colorPrimary"));
+        }
+        b.setBackground(bg);
+    }
+
+    private MaterialButton styledButton(String overlayStyle) {
+        int id = res(overlayStyle, "style");
+        Context ctx = id != 0 ? new ContextThemeWrapper(this, id) : this;
+        return new MaterialButton(ctx);
+    }
+
+    private int res(String name, String type) {
+        return getResources().getIdentifier(name, type, getPackageName());
+    }
+
+    /** Resolves a theme attribute (e.g. selectableItemBackgroundBorderless) to a res id. */
+    private int attrResId(String attrName) {
+        int attr = res(attrName, "attr");
+        TypedValue v = new TypedValue();
+        if (attr != 0 && getTheme().resolveAttribute(attr, v, true) && v.resourceId != 0) {
+            return v.resourceId;
+        }
+        return 0;
+    }
+
+    private int attrColor(String attrName) {
+        int attr = res(attrName, "attr");
+        TypedValue v = new TypedValue();
+        if (attr != 0 && getTheme().resolveAttribute(attr, v, true) && v.type >= TypedValue.TYPE_FIRST_COLOR_INT) {
+            return v.data;
+        }
+        return 0xFF444444;
     }
 
     private int dp(int v) {

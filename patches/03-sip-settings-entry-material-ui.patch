@@ -1,0 +1,76 @@
+# Patch 3 — SIP settings entry in dialpad overflow + Material 3 settings UI
+#
+# Files touched (decompiled tree):
+#   res/menu/dialpad_options.xml
+#   res/values/public.xml, res/values/ids.xml
+#   res/values/styles.xml, res/values-night/styles.xml
+#   res/drawable/sip_ic_back.xml (new)
+#   AndroidManifest.xml
+#   smali_classes2/kd.smali
+#   app code: SipAccountsActivity.java (full Material 3 rewrite)
+#
+# Problem: the SIP account could only be reached via the launcher shortcut or
+# the persistent notification. The system "Calling accounts" screen
+# (com.android.phone PhoneAccountSettingsActivity on Android 16) renders rows
+# as enable/disable toggles only - it never fires
+# android.telecom.action.CONFIGURE_PHONE_ACCOUNT (zero refs in its dex), so
+# there is no hook there. The dialer's own Settings list is a single Compose
+# preference (PatrickComposePreferenceCompat in rng.smali) - not safely
+# patchable. The dialpad's overflow menu, however, is a plain menu XML
+# (dialpad_options.xml) inflated in lxu.smali with clicks dispatched to
+# kd.smali L(Lfu;Landroid/view/MenuItem;)Z - a safe, native injection point.
+#
+# 1) res/menu/dialpad_options.xml - append the item (uses existing string):
+#     <item android:id="@id/sip_settings_menu_item"
+#           android:title="@string/sip_settings_title"
+#           android:showAsAction="withText" />
+#
+# 2) res/values/public.xml - fix the id so smali can reference it literally:
+#     <public type="id" name="sip_settings_menu_item" id="0x7f0b08a8" />
+#   res/values/ids.xml - add:
+#     <id name="sip_settings_menu_item" />
+#
+# 3) smali_classes2/kd.smali - prepend to L(Lfu;Landroid/view/MenuItem;)Z
+#    (right after ".locals 5", before the original body):
+--------------------------------------------------------------------------------
+    # --- DialerSip mod: SIP settings overflow item ---
+    if-eqz p2, :sip_skip
+    invoke-interface {p2}, Landroid/view/MenuItem;->getItemId()I
+    move-result v0
+    const v4, 0x7f0b08a8
+    if-ne v0, v4, :sip_skip
+    iget-object v0, p0, Lkd;->a:Lkg;
+    iget-object v0, v0, Lkg;->a:Landroid/content/Context;
+    if-eqz v0, :sip_skip
+    new-instance v4, Landroid/content/Intent;
+    const-class v2, Lcom/dialersip/SipAccountsActivity;
+    invoke-direct {v4, v0, v2}, Landroid/content/Intent;-><init>(Landroid/content/Context;Ljava/lang/Class;)V
+    const/high16 v2, 0x10000000
+    invoke-virtual {v4, v2}, Landroid/content/Intent;->addFlags(I)Landroid/content/Intent;
+    invoke-virtual {v0, v4}, Landroid/content/Context;->startActivity(Landroid/content/Intent;)V
+    const/4 v0, 0x1
+    return v0
+    :sip_skip
+--------------------------------------------------------------------------------
+#    (kd.L clobbers p1 before use, so the branch must run first and only touch
+#     p2/v0/v2/v4; register pressure is safe because .locals is 5.)
+#
+# 4) New theme Theme.DialerSip (parent Theme.Material3.DynamicColors.DayNight,
+#    Google-blue palette, values-night dark variant) + button style overlays
+#    ThemeOverlay.DialerSip.OutlinedButton / .TextButton - see res/values/
+#    styles.xml. Applied to SipAccountsActivity in AndroidManifest.xml, which
+#    also gains an android.telecom.action.CONFIGURE_PHONE_ACCOUNT intent-filter
+#    (no-op on this ROM, correct on ROMs that do support account tapping).
+#
+# 5) SipAccountsActivity rebuilt with bundled Material 3 widgets. IMPORTANT -
+#    R8 renamed away several Material APIs, so spliced code may only call:
+#      - methods defined in the Material class itself (TextInputLayout.addView,
+#        MaterialButton/MaterialSwitch constructors)
+#      - framework methods (setText, setChecked via CompoundButton, ...)
+#    Broken if called from smali: MaterialToolbar.setTitle/setNavigationIcon,
+#    MaterialButton.setChecked, MaterialButtonToggleGroup.setSingleSelection/
+#    setSelectionRequired, TextInputLayout.setHint/setEndIconMode.
+#    Workarounds used: framework header row instead of MaterialToolbar; hint
+#    set on TextInputEditText (TextInputLayout adopts it in its addView
+#    override); UDP/TCP segment painted manually instead of a toggle group;
+#    no password visibility toggle.
