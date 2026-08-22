@@ -19,7 +19,7 @@ WORK=$TOOLS/standalone-build
 OUT=$TOOLS/out
 KS=${KS:-$TOOLS/sip-dialer.keystore}           # use YOUR keystore for own builds
 KS_ALIAS=${KS_ALIAS:-sipdialer}
-KS_PASS=${KS_PASS:-redacted}
+KS_PASS=${KS_PASS:?set KS_PASS to your keystore password}
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 
