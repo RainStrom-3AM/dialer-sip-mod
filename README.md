@@ -17,6 +17,10 @@ Real SIP calling on Android, two ways:
 > variant modifies Google's proprietary Dialer — personal use only. The
 > Java sources in `app/src` and the build scripts are original code (MIT).
 
+| SIP account screen | Calling accounts |
+|---|---|
+| ![SIP account](docs/images/screenshot-sip-account.png) | ![Calling accounts](docs/images/screenshot-calling-accounts.png) |
+
 ## Downloads (Releases)
 
 | Asset | For | Install |
@@ -141,12 +145,6 @@ bash standalone/build_standalone.sh        # -> DialerSIP-standalone.apk
    `pm install-existing --user 0 com.google.android.dialer`.
 3. Future builds signed with the same key update via `pm install -r` — no
    reboot. Disable the module + reboot to return to stock.
-
-## Screenshots
-
-| SIP account screen | Calling accounts |
-|---|---|
-| ![SIP account](docs/images/screenshot-sip-account.png) | ![Calling accounts](docs/images/screenshot-calling-accounts.png) |
 
 ## Setting up your SIP account
 
