@@ -1,4 +1,6 @@
-<p align="center"><img src="docs/images/banner.jpg" alt="Dialer SIP Mod" width="860"></p>
+| ADD SIP STEPS | Calling |
+|---|---|
+| ![SIP account](docs/images/step.jpg) | ![Calling accounts](docs/images/call.jpg) |
 
 # Dialer SIP Mod
 
