@@ -64,6 +64,62 @@ public final class PjCall extends Call {
         }
     }
 
+    /**
+     * Picks the caller identity from the raw incoming INVITE. Order:
+     * P-Asserted-Identity, Remote-Party-ID, then the From header (via
+     * CallInfo). Carriers frequently send an anonymous From with the real
+     * CLI in P-Asserted-Identity, so From-only parsing logged "Unknown".
+     */
+    void cacheIncomingIdentity(String rawInvite) {
+        if (rawInvite != null && !rawInvite.isEmpty()) {
+            try {
+                String pai = headerValue(rawInvite, "P-Asserted-Identity");
+                String rpid = headerValue(rawInvite, "Remote-Party-ID");
+                String from = headerValue(rawInvite, "From");
+                Log.i(TAG, "incoming INVITE identity headers:"
+                        + " PAI=" + trunc(pai) + " RPID=" + trunc(rpid)
+                        + " From=" + trunc(from));
+                String chosen = pai != null ? pai : (rpid != null ? rpid : null);
+                if (chosen != null && containsSipOrTelUri(chosen)) {
+                    cachedRemoteUri = chosen.trim();
+                    Log.i(TAG, "caller identity from " + (pai != null ? "P-Asserted-Identity" : "Remote-Party-ID"));
+                    return;
+                }
+            } catch (Exception e) {
+                Log.w(TAG, "identity header parse: " + e);
+            }
+        }
+        cacheRemoteUri();
+    }
+
+    /** Value of a header from a raw SIP message (handles folded lines); null if absent. */
+    private static String headerValue(String msg, String header) {
+        String[] lines = msg.split("\r?\n");
+        for (int i = 0; i < lines.length; i++) {
+            String l = lines[i];
+            int colon = l.indexOf(':');
+            if (colon <= 0) continue;
+            if (!l.substring(0, colon).trim().equalsIgnoreCase(header)) continue;
+            StringBuilder v = new StringBuilder(l.substring(colon + 1).trim());
+            for (int j = i + 1; j < lines.length; j++) {   // folded continuation lines
+                String nl = lines[j];
+                if (nl.isEmpty() || (nl.charAt(0) != ' ' && nl.charAt(0) != '\t')) break;
+                v.append(' ').append(nl.trim());
+            }
+            return v.toString();
+        }
+        return null;
+    }
+
+    private static boolean containsSipOrTelUri(String v) {
+        return v != null && (v.contains("sip:") || v.contains("sips:") || v.contains("tel:"));
+    }
+
+    private static String trunc(String s) {
+        if (s == null) return "none";
+        return s.length() > 60 ? s.substring(0, 60) + "..." : s;
+    }
+
     public void setConnection(SipConnection c) {
         connection = c;
     }

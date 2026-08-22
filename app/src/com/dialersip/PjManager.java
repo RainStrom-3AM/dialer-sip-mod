@@ -81,7 +81,16 @@ public final class PjManager {
             PjManager m = instance;
             if (m == null || m.listener == null) return;
             PjCall call = new PjCall(this, prm.getCallId());
-            call.cacheRemoteUri(); // runs on pjsip's own thread
+            String raw = "";
+            try {
+                org.pjsip.pjsua2.SipRxData rd = prm.getRdata();
+                if (rd != null) raw = rd.getWholeMsg();
+            } catch (Throwable t) {
+                Log.w("DialerSip", "rdata read: " + t);
+            }
+            // Prefer identity headers over the plain From: carriers deliver
+            // the real CLI in P-Asserted-Identity while From is anonymous.
+            call.cacheIncomingIdentity(raw);
             m.listener.onIncomingCall(call);
         }
     }
