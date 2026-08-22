@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/images/banner.jpg" alt="Dialer SIP Mod" width="720"></p>
+
 # Dialer SIP Mod
 
 Real SIP calling on Android, two ways:
@@ -140,14 +142,49 @@ bash standalone/build_standalone.sh        # -> DialerSIP-standalone.apk
 3. Future builds signed with the same key update via `pm install -r` — no
    reboot. Disable the module + reboot to return to stock.
 
-## Using it
+## Screenshots
 
-- Rooted: dialpad → **⋮ → SIP accounts**, long-press the Phone icon, or the
-  persistent notification. Standalone: the app icon.
-- Configure the account (server, user, auth user, password, port, UDP/TCP,
-  receive-calls switch), save, enable the account (standalone: Calling
-  accounts toggle), then dial and pick **SIP** in the chooser ("Ask first").
-- Diagnostics: `adb logcat -s DialerSip PjsipTrace`.
+| SIP account screen | Calling accounts |
+|---|---|
+| ![SIP account](docs/images/screenshot-sip-account.png) | ![Calling accounts](docs/images/screenshot-calling-accounts.png) |
+
+## Setting up your SIP account
+
+You need a SIP account first — any ITSP / VoIP provider works (a plain
+username + password + server, no OAuth). Then:
+
+1. **Open the SIP settings**
+   - *Rooted:* open the Google Phone dialpad → tap **⋮ → SIP accounts**.
+   - *Standalone:* launch the **Dialer SIP** app icon.
+2. **Fill in the account** (screenshot 1):
+   - **Username** — the SIP user the provider gave you (usually your
+     account number)
+   - **Password** — the SIP/auth password
+   - **Server** — the SIP server host or IP (e.g. `sip.example.com`)
+   - **Auth username** — only if the provider uses a separate auth user;
+     otherwise leave it equal to the username
+   - **Port / Transport** — `5060` UDP for most providers; switch to TCP
+     only if they say so
+   - **Receive incoming calls** — leave on unless you want outgoing-only
+3. **Save.** The service starts and registers; the status card turns
+   **Registered ✓ (200)**, usually within a second or two. If it says
+   `401/403` re-check username/password; `timeout` means server, port or
+   transport is wrong.
+4. **Enable the account for calling**
+   - *Rooted:* already enabled automatically.
+   - *Standalone:* open system **Settings → Calling accounts → SIP** and
+     set **Make calls with: Ask first** (screenshot 2). One-time only.
+5. **Make a call** — dial any number in the dialer and pick **SIP** in
+   the chooser. To dial another SIP user directly, enter the full URI,
+   e.g. `12345678@sip.example.com`.
+6. **Receive calls** — they ring through the stock in-call UI with the
+   caller's number (taken from `P-Asserted-Identity` when the provider
+   sends it), and land in the normal call log.
+
+Run only one variant per SIP account at a time — two registrations of
+the same account will double-ring.
+
+Diagnostics: `adb logcat -s DialerSip PjsipTrace`.
 
 ## FAQ
 
