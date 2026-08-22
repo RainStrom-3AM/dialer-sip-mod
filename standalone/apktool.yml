@@ -1,0 +1,23 @@
+version: 3.0.3
+apkFileName: DialerSIP-standalone.apk
+isFrameworkApk: false
+usesFramework:
+  ids:
+  - 1
+sdkInfo:
+  minSdkVersion: 30
+  targetSdkVersion: 36
+packageInfo:
+  forcedPackageId: '127'
+doNotCompress:
+- arsc
+- dex
+- m4a
+- ogg
+- png
+- so
+- wav
+- webp
+versionInfo:
+  versionCode: 100
+  versionName: 1.0
