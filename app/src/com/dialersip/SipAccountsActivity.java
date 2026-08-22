@@ -264,8 +264,8 @@ public final class SipAccountsActivity extends Activity {
         } catch (NumberFormatException e) {
             p = 5060;
         }
-        SipAccountStore.save(this, srv, usr, authUser.getText().toString(),
-                password.getText().toString(), p,
+        SipAccountStore.save(this, srv, usr, authUser.getText().toString().trim(),
+                password.getText().toString().trim(), p,
                 tcpSelected ? 1 : 0,
                 receive.isChecked());
         SipConnectionService.ensurePhoneAccount(this);
