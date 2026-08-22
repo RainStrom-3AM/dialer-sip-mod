@@ -1,0 +1,6 @@
+*.keystore
+*.jks
+dist/
+*.log
+baksmali-lib/
+splice-work/

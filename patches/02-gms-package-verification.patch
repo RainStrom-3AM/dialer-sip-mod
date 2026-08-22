@@ -1,0 +1,43 @@
+# Patch 2 — GMS package-verification crash fix
+#
+# File: smali/ziv.smali
+# Method: handleMessage(Landroid/os/Message;)V
+#
+# The dialer periodically asks Google Play Services to verify its own APK
+# signature digest ("PackageVerificationRslt"). With any non-Google signing
+# key the check fails with a SecurityException on the "DG" handler thread,
+# crashing the whole app every few minutes.
+#
+# Note: this check can never pass for a re-signed APK (it compares the signing
+# certificate SHA-256 against Google's). The only options are neutralizing it
+# locally or not running a modded dialer. Side effect: Google cloud features
+# that depend on the attestation degrade gracefully; calling is unaffected.
+#
+# Fix: rename the original handleMessage body to handleMessageOriginal and add
+# a dispatcher that swallows all exceptions.
+#
+# Apply: replace the line
+#     .method public final handleMessage(Landroid/os/Message;)V
+#         .locals 13
+# with the block below (the rest of the original method body stays unchanged).
+--------------------------------------------------------------------------------
+.method public final handleMessage(Landroid/os/Message;)V
+    .locals 1
+
+    :try_start_0
+    invoke-virtual {p0, p1}, Lziv;->handleMessageOriginal(Landroid/os/Message;)V
+    :try_end_0
+    .catch Ljava/lang/Exception; {:try_start_0 .. :try_end_0} :catch_0
+
+    goto :goto_0
+
+    :catch_0
+    move-exception v0
+
+    :goto_0
+    return-void
+.end method
+
+.method public final handleMessageOriginal(Landroid/os/Message;)V
+    .locals 13
+--------------------------------------------------------------------------------

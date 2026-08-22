@@ -1,0 +1,6 @@
+id=dialer_sip_mod
+name=Dialer SIP Mod (bundled PJSIP)
+version=v1.0
+versionCode=1
+author=Rupa
+description=Replaces Google Dialer with SIP-enabled build: bundled PJSIP stack (G.711+Opus, UDP/TCP), SIP PhoneAccount via Telecom, foreground registration service. Disable module to restore stock dialer.

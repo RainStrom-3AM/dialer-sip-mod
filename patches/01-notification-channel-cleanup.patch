@@ -1,0 +1,46 @@
+# Patch 1 — Notification channel cleanup crash fix
+#
+# File: smali_classes3/db$$ExternalSyntheticApiModelOutline1.smali
+# Method: m(Landroid/app/NotificationManager;Ljava/lang/String;)V
+#
+# The Google Dialer's Application.onCreate deletes notification channels it does
+# not recognize. Our SIP foreground service runs on its own channel
+# ("dialer_sip_service"), and Android 14+ forbids deleting a channel while a
+# foreground service uses it -> SecurityException -> crash loop at every app
+# start while the SIP service is active.
+#
+# Fix: wrap the deleteNotificationChannel call in a try/catch so a failed
+# cleanup is ignored instead of killing the app.
+#
+# BEFORE:
+#--------------------------------------------------------------------------------
+# .method public static bridge synthetic m(Landroid/app/NotificationManager;Ljava/lang/String;)V
+#     .locals 0
+#
+#     .line 62
+#     invoke-virtual {p0, p1}, Landroid/app/NotificationManager;->deleteNotificationChannel(Ljava/lang/String;)V
+#
+#     return-void
+# .end method
+#--------------------------------------------------------------------------------
+#
+# AFTER:
+--------------------------------------------------------------------------------
+.method public static bridge synthetic m(Landroid/app/NotificationManager;Ljava/lang/String;)V
+    .locals 1
+
+    .line 62
+    :try_start_0
+    invoke-virtual {p0, p1}, Landroid/app/NotificationManager;->deleteNotificationChannel(Ljava/lang/String;)V
+    :try_end_0
+    .catch Ljava/lang/SecurityException; {:try_start_0 .. :try_end_0} :catch_0
+
+    goto :goto_0
+
+    :catch_0
+    move-exception v0
+
+    :goto_0
+    return-void
+.end method
+--------------------------------------------------------------------------------
