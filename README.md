@@ -15,11 +15,26 @@ Android 16 — bundled [PJSIP](https://github.com/pjsip/pjproject) 2.15.1 stack
 
 | Piece | Purpose |
 |---|---|
-| `app/src/com/dialersip/` | Java sources: pjsua2 manager, Telecom ConnectionService, foreground registration service, settings + dial UI, boot receiver |
-| `patches/` | Two smali patches applied to the decompiled dialer (crash fixes) |
+| `app/src/com/dialersip/` | Java sources: pjsua2 manager, Telecom ConnectionService, foreground registration service, Material 3 settings + dial UI, boot receiver |
+| `patches/` | Three patches applied to the decompiled dialer: two crash fixes + the dialpad-overflow settings entry / theme resources |
 | `build/build_splice.sh` | Compile → dex → baksmali → splice pipeline |
 | `build/module.prop` | Magisk module metadata |
 | Release assets | Prebuilt, signed APK (also packaged as a Magisk module zip) |
+
+## Features
+
+- SIP calls in the stock dialer: account chooser (SIM/SIP), stock in-call UI,
+  call log with proper caller ID (`From`, `P-Asserted-Identity`,
+  `Remote-Party-ID` parsing; numbers match contacts).
+- **SIP settings** from the dialpad overflow (⋮) menu - Material 3 screen
+  (bundled components, Google-blue palette, automatic dark mode) to add,
+  edit, delete the account and start/stop the service.
+- Incoming calls: Telecom hand-off via a thread-safe queue; unanswered calls
+  that Telecom refuses to present are answered 486 Busy after 8s so the
+  caller stops hearing ringback.
+- pjsua2 `Call` lifetime is managed explicitly (strong refs + deferred
+  `delete()` on the pjlib thread) - letting the GC finalize a call aborts
+  the whole app natively.
 
 ## Architecture
 
