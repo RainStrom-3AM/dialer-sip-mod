@@ -35,8 +35,14 @@ public final class SipRegistrationService extends Service {
      * (observed as CREATE_CONNECTION_FAILED -> "Unknown" call log entries).
      */
     private static final java.util.ArrayDeque<PjCall> PENDING = new java.util.ArrayDeque<>();
+    private static final android.os.Handler MAIN =
+            new android.os.Handler(android.os.Looper.getMainLooper());
     private ConnectivityManager.NetworkCallback netCallback;
     private boolean running;
+
+    /** How long Telecom gets to claim a stashed incoming call before we
+     *  answer 486 ourselves; normal claims arrive in milliseconds. */
+    private static final long UNCLAIMED_BUSY_MS = 8000;
 
     static void stashIncomingCall(PjCall call) {
         synchronized (PENDING) {
@@ -44,6 +50,22 @@ public final class SipRegistrationService extends Service {
             Log.i(TAG, "stashed incoming call: " + call.remoteUri()
                     + " (queue=" + PENDING.size() + ")");
         }
+        // Telecom sometimes aborts incoming-call creation for third-party
+        // connection services while another call is active on the device
+        // (CREATE_CONNECTION_FAILED without ever calling our service). The SIP
+        // leg would then ring unanswered until the server's timeout while the
+        // caller keeps hearing ringback. If Telecom has not claimed the call
+        // within the timeout, reply 486 Busy ourselves so the caller's leg
+        // (e.g. a SIM call routed through the SIP provider) ends promptly.
+        MAIN.postDelayed(() -> {
+            synchronized (PENDING) {
+                if (PENDING.remove(call)) {
+                    Log.w(TAG, "incoming call unclaimed after " + UNCLAIMED_BUSY_MS
+                            + "ms - replying 486 busy: " + call.remoteUri());
+                    call.sipReject();
+                }
+            }
+        }, UNCLAIMED_BUSY_MS);
     }
 
     static PjCall takePendingIncomingCall() {

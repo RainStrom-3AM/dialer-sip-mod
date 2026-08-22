@@ -223,7 +223,9 @@ public final class PjCall extends Call {
             try {
                 CallOpParam prm = new CallOpParam();
                 prm.setStatusCode(486);
+                prm.setReason("Busy Here");
                 hangup(prm);
+                Log.i(TAG, "486 Busy Here sent");
             } catch (Exception e) {
                 Log.e(TAG, "reject failed", e);
             }
