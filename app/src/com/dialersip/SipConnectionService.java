@@ -60,6 +60,17 @@ public final class SipConnectionService extends ConnectionService {
         }
     }
 
+    /** Removes the SIP PhoneAccount from Telecom (profile deleted). */
+    public static void removePhoneAccount(Context c) {
+        TelecomManager tm = (TelecomManager) c.getSystemService(Context.TELECOM_SERVICE);
+        if (tm == null) return;
+        try {
+            tm.unregisterPhoneAccount(handle(c));
+        } catch (Exception e) {
+            Log.w(TAG, "unregisterPhoneAccount: " + e.getMessage());
+        }
+    }
+
     @Override
     public Connection onCreateOutgoingConnection(
             PhoneAccountHandle connectionManagerPhoneAccount, ConnectionRequest request) {

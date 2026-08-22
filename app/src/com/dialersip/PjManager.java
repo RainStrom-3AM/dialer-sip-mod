@@ -236,6 +236,25 @@ public final class PjManager {
         });
     }
 
+    /** Drops the registration and account entirely (profile deleted). */
+    public void deleteAccount() {
+        handler.post(() -> {
+            try {
+                if (account != null) {
+                    try {
+                        account.setRegistration(false);
+                        account.delete();
+                    } catch (Exception e) {
+                        Log.w(TAG, "account delete: " + e.getMessage());
+                    }
+                    account = null;
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "deleteAccount failed", e);
+            }
+        });
+    }
+
     /** Places an outgoing call; returns the PjCall that backs the Connection.
      *  Self-sufficient: boots the stack + account if this process never did. */
     public PjCall makeCall(String dialUri, SipConnection connection) {

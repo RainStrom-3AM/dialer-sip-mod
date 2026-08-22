@@ -3,9 +3,9 @@ package com.dialersip;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.os.Bundle;
 import android.text.InputType;
-import android.text.TextUtils;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
@@ -18,9 +18,9 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 /**
- * SIP account settings. Deliberately built with plain programmatic views:
- * no layout resources, no androidx, so it splices into the decompiled APK
- * without any resource-ID surgery.
+ * SIP account management: create, edit, and delete the profile.
+ * Deliberately built with plain programmatic views: no layout resources,
+ * no androidx, so it splices into the decompiled APK without resource-ID surgery.
  */
 public final class SipAccountsActivity extends Activity {
 
@@ -31,6 +31,9 @@ public final class SipAccountsActivity extends Activity {
     private EditText port;
     private CheckBox receive;
     private android.widget.RadioGroup transport;
+    private Button saveButton;
+    private Button deleteButton;
+    private TextView statusHeader;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -42,6 +45,11 @@ public final class SipAccountsActivity extends Activity {
         int pad = dp(16);
         root.setPadding(pad, pad, pad, dp(80));
         scroll.addView(root);
+
+        statusHeader = new TextView(this);
+        statusHeader.setTextSize(14);
+        statusHeader.setPadding(0, 0, 0, dp(12));
+        root.addView(statusHeader, wrap());
 
         root.addView(title("SIP account"));
 
@@ -82,24 +90,45 @@ public final class SipAccountsActivity extends Activity {
         receive.setChecked(SipAccountStore.receiveCalls(this));
         root.addView(receive, wrap());
 
-        Button save = new Button(this);
-        save.setText("Save");
-        save.setOnClickListener(v -> save());
-        root.addView(save, wrap());
+        saveButton = new Button(this);
+        saveButton.setOnClickListener(v -> save());
+        root.addView(saveButton, wrap());
 
-        Button remove = new Button(this);
-        remove.setText("Disable SIP service");
-        remove.setOnClickListener(v -> {
+        deleteButton = new Button(this);
+        deleteButton.setText("Delete account");
+        deleteButton.setOnClickListener(v -> confirmDelete());
+        root.addView(deleteButton, wrap());
+
+        Button stop = new Button(this);
+        stop.setText("Stop SIP service (keep account)");
+        stop.setOnClickListener(v -> {
             SipRegistrationService.stop(this);
             Toast.makeText(this, "SIP service stopped", Toast.LENGTH_SHORT).show();
         });
-        root.addView(remove, wrap());
+        root.addView(stop, wrap());
 
         root.addView(hint("Calls are placed from the persistent SIP notification "
                 + "or the launcher shortcut \"New SIP call\". The SIP account also "
                 + "appears under Settings > Calling accounts for enabling/disabling."));
 
+        refreshMode();
         setContentView(scroll);
+    }
+
+    /** Switch labels/header between "no account yet" and "editing existing account". */
+    private void refreshMode() {
+        boolean configured = SipAccountStore.configured(this);
+        saveButton.setText(configured ? "Save changes" : "Add account");
+        deleteButton.setEnabled(configured);
+        deleteButton.setAlpha(configured ? 1f : 0.4f);
+        if (configured) {
+            statusHeader.setText("Account: " + SipAccountStore.username(this)
+                    + "@" + SipAccountStore.server(this)
+                    + "  (" + (SipAccountStore.transport(this) == 1 ? "TCP" : "UDP")
+                    + ", port " + SipAccountStore.port(this) + ")");
+        } else {
+            statusHeader.setText("No SIP account configured — enter details below.");
+        }
     }
 
     private void save() {
@@ -127,7 +156,37 @@ public final class SipAccountsActivity extends Activity {
             SipRegistrationService.stop(this);
             Toast.makeText(this, "Saved", Toast.LENGTH_SHORT).show();
         }
-        finish();
+        refreshMode();
+    }
+
+    private void confirmDelete() {
+        new AlertDialog.Builder(this)
+                .setTitle("Delete SIP account?")
+                .setMessage("This removes the saved profile, stops the registration "
+                        + "and removes the SIP entry from Calling accounts.")
+                .setPositiveButton("Delete", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        deleteAccount();
+                    }
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void deleteAccount() {
+        SipRegistrationService.stop(this);          // stops FGS + PjManager shutdown
+        PjManager.get(this).deleteAccount();        // unregister + drop account object
+        SipConnectionService.removePhoneAccount(this);
+        SipAccountStore.clear(this);
+        server.setText("");
+        username.setText("");
+        authUser.setText("");
+        password.setText("");
+        port.setText("5060");
+        receive.setChecked(false);
+        refreshMode();
+        Toast.makeText(this, "SIP account deleted", Toast.LENGTH_SHORT).show();
     }
 
     // ---- tiny view helpers ----

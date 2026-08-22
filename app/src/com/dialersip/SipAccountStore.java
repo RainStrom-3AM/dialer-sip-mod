@@ -55,6 +55,11 @@ public final class SipAccountStore {
                 .apply();
     }
 
+    /** Erases the stored profile entirely. */
+    public static void clear(Context c) {
+        prefs(c).edit().clear().apply();
+    }
+
     /** SIP identity: sip:username@server */
     public static String sipUri(Context c) {
         return "sip:" + username(c) + "@" + server(c);
