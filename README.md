@@ -115,23 +115,64 @@ Disable the Magisk module + reboot to return to stock.
 
 ## Using it
 
-- Long-press the Phone icon → **SIP settings** (server, user, auth user,
-  password, port, UDP/TCP, receive-calls toggle) or use the persistent
-  notification once enabled.
-- Dial from the dialpad and pick **SIP** in the account chooser, or use the
+- Open the dialpad, tap **⋮ → SIP accounts** — or long-press the Phone icon
+  (**SIP settings** shortcut), or use the persistent notification's
+  **SIP settings** action.
+- The settings screen (Material 3, light/dark): server, username, auth
+  username, password, port, UDP/TCP, receive-incoming-calls switch, plus
+  **Save changes / Delete account / Stop SIP service**.
+- Dial any number and pick **SIP** in the account chooser (set the chooser to
+  "Ask first" in Settings → Calling accounts → Make calls with), or use the
   **New SIP call** shortcut / notification action.
 - Diagnostics: `adb logcat -s DialerSip PjsipTrace` — registration state,
-  call disconnect codes+reasons, full SIP traces, audio-bridge events.
+  identity-header extraction (`PAI=... RPID=... From=...`), queue hand-off
+  (`stashed/claimed incoming call`), 486 watchdog, call disconnect
+  codes+reasons, full SIP traces, audio-bridge events.
+
+## Requirements
+
+| Requirement | Detail |
+|---|---|
+| Root | **Required** — Magisk module replaces `/product/priv-app/GoogleDialer/` |
+| Android | 11 (API 30) through 16; `minSdk=30`, `targetSdk=37` (newer untested) |
+| CPU | arm64-v8a only (the bundled PJSIP stack is 64-bit) |
+| Base app | Google Phone (com.google.android.dialer) 233.x — patches target this code |
+
+Non-rooted devices cannot install it: the APK is re-signed, so it can never
+update over Google's Play-Store-installed dialer. The ConnectionService API
+itself does not need root — the system-dialer *replacement* does.
+
+## FAQ
+
+**Will Play Store updates break it?** The Play Store can't update a
+signature-mismatched app, so it won't clobber the mod by itself — but never
+re-enable auto-updates for the dialer. Every future mod build signed with the
+same key installs over the previous one via `pm install -r` with no reboot.
+
+**Does it work on other dialer versions?** The three smali patches are made
+against dialer 233.x internals. Other versions may need the patches re-applied
+by hand — the Java sources and build pipeline are version-independent.
+
+**Is it private?** Nothing leaves the device except SIP traffic to the server
+you configure. No telemetry added; Google's own attestation is neutralized
+(see patches/02) because a re-signed APK can never pass it.
 
 ## Known limitations
 
-- The dialer's settings screens are proto/parcel driven and heavily R8
-  obfuscated; SIP account editing lives in its own activity (shortcut +
-  notification) instead of inside Settings > Calling accounts.
+- While a cellular call is active/connecting, this ROM's Telecom aborts
+  incoming-call creation for third-party connection services without ever
+  calling our code. The mod detects this (call unclaimed for 8s) and answers
+  **486 Busy** so the caller stops hearing ringback; the aborted call is
+  logged by the system as a numberless missed entry.
 - Outgoing calls show no "via SIP" badge (the dialer has an incoming-only
-  template — stock behavior for all third-party accounts).
-- Google attestation is neutralized (see patches/02), so attestation-backed
-  cloud features degrade.
+  template — stock behavior for all third-party accounts). Outgoing call-log
+  entries record the dialed SIP URI.
+- Hold/reject-with-message are not implemented for SIP calls.
+- No TLS transport (UDP + TCP only), arm64 only.
+- Call recording exists as a work-in-progress branch (`dev-recording`), not
+  shipped.
+- Google attestation is neutralized (patches/02), so attestation-backed cloud
+  features degrade.
 
 ## License
 
