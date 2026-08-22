@@ -19,6 +19,41 @@ Real SIP calling on Android, two ways:
 > variant modifies Google's proprietary Dialer — personal use only. The
 > Java sources in `app/src` and the build scripts are original code (MIT).
 
+## How it works
+
+Both variants share the same engine and the same trick: Android's public
+**Telecom `ConnectionService` API** lets any app register a `PhoneAccount`
+(a virtual phone line) that handles `tel:` and `sip:` numbers — the OS then
+treats it like a second SIM. Because the connection service is *managed*
+(not self-managed), the **stock dialer draws the in-call screen, plays the
+ringtone and writes the call log** — a SIP call is visually indistinguishable
+from a cellular one.
+
+- **Making a call** — dial in the normal dialer; Android sees two accounts
+  and shows the SIM/SIP chooser; picking SIP hands the call to the mod's
+  `ConnectionService`, which places a real SIP call through PJSIP
+  (INVITE, 180 Ringing, RTP bridged to mic/speaker).
+- **Receiving a call** — a foreground service holds the registration with
+  NAT keep-alives; an incoming INVITE is offered to Telecom, which rings
+  the stock in-call UI with the caller's number (`P-Asserted-Identity` →
+  `Remote-Party-ID` → `From`) and files it in the call log.
+
+**What root actually buys** (rooted variant only):
+
+1. The SIP code is *spliced into the system dialer itself* (smali level) —
+   one app, one process, plus a "SIP accounts" entry in the dialpad ⋮ menu.
+2. The PhoneAccount is force-enabled at boot with the privileged
+   `MODIFY_PHONE_STATE` reflection — the standalone instead needs the
+   one-time **Calling accounts → "Ask first"** toggle, because Android
+   requires the user's consent for third-party accounts.
+3. Boot/GMS crashes of the re-signed APK are patched out.
+
+**Inside the packages** — rooted: the Google Dialer APK with the
+`com.dialersip` classes + `libpjsua2.so` spliced into its dex set.
+Standalone: the exact same classes and native lib, repackaged as
+`com.rainstrom.dialersip` with the dialer's Material libraries bundled
+along and its own launcher icon.
+
 | SIP account screen | Calling accounts |
 |---|---|
 | ![SIP account](docs/images/screenshot-sip-account.png) | ![Calling accounts](docs/images/screenshot-calling-accounts.png) |
