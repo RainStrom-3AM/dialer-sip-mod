@@ -86,7 +86,7 @@ cd pjsip-apps/src/swig/java && make TARGET_ARCH=arm64-v8a
 
 ```bash
 apktool d com.google.android.dialer.apk dialer_decompiled
-# apply patches/01 and patches/02 (see file headers)
+# apply patches/01, 02 and 03 (see file headers)
 # copy app/src sources + edit build/build_splice.sh paths
 bash build/build_splice.sh          # -> smali_classes6/ + lib/arm64-v8a/*.so
 apktool b dialer_decompiled -o unsigned.apk
