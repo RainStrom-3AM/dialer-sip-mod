@@ -1,4 +1,4 @@
-<p align="center"><img src="docs/images/banner.jpg" alt="Dialer SIP Mod" width="720"></p>
+<p align="center"><img src="docs/images/banner.jpg" alt="Dialer SIP Mod" width="860"></p>
 
 # Dialer SIP Mod
 
