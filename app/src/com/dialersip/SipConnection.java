@@ -85,6 +85,9 @@ public final class SipConnection extends Connection {
 
     void onSipActive() {
         setActive();
+        // Call audio is about to flow: make sure the registration FGS carries
+        // the microphone type (it starts phoneCall-only from boot/background).
+        SipRegistrationService.upgradeToMicrophone();
         setupAudio();
     }
 

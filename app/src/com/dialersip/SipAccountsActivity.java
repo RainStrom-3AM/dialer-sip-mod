@@ -49,6 +49,15 @@ public final class SipAccountsActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        // The microphone FGS type and call audio both need RECORD_AUDIO at
+        // runtime; asking here (settings screen) covers boot-time service
+        // starts later, which cannot show a permission dialog themselves.
+        if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)
+                != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(
+                    new String[]{android.Manifest.permission.RECORD_AUDIO}, 1);
+        }
+
         ScrollView scroll = new ScrollView(this);
         // edge-to-edge is enforced at this targetSdk: pad the root for system bars
         scroll.setFitsSystemWindows(true);

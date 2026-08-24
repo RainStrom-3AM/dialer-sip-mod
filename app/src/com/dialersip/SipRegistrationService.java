@@ -19,12 +19,19 @@ import android.util.Log;
 /**
  * Foreground service keeping the SIP registration alive (NAT keep-alive,
  * incoming INVITE handling). Runs with phoneCall|microphone FGS type.
+ * The microphone type is only usable while RECORD_AUDIO is runtime-granted
+ * AND the service is started from an eligible (foreground) state - boot-time
+ * starts fall back to phoneCall only and are re-promoted once a call goes
+ * active (see upgradeToMicrophone).
  */
 public final class SipRegistrationService extends Service {
 
     private static final String TAG = "DialerSip";
     private static final int NOTIF_ID = 0x5131;
     private static final String CHANNEL_ID = "dialer_sip_service";
+
+    /** Live instance so call code can re-promote the FGS with microphone. */
+    private static volatile SipRegistrationService instance;
 
     /**
      * Incoming calls waiting to be claimed by
@@ -116,15 +123,26 @@ public final class SipRegistrationService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
+        instance = this;
         createChannel();
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        startInForeground();
+        // Register the phone account BEFORE promoting to foreground: the
+        // phoneCall FGS type requires an active phone account, and at boot
+        // Telecom may not know about us yet.
+        SipConnectionService.ensurePhoneAccount(this);
+        if (!startInForeground()) {
+            // Could not promote to foreground at all. Bail out WITHOUT
+            // starting the SIP stack: otherwise the imminent onDestroy()
+            // races the just-started registration (observed as pjsua
+            // PJSIP_EBUSY on unregister) and leaks the Endpoint.
+            stopSelf();
+            return START_NOT_STICKY;
+        }
         if (!running) {
             running = true;
-            SipConnectionService.ensurePhoneAccount(this);
             PjManager pm = PjManager.get(this);
             pm.setListener(new PjManager.Listener() {
                 @Override
@@ -148,6 +166,7 @@ public final class SipRegistrationService extends Service {
 
     @Override
     public void onDestroy() {
+        if (instance == this) instance = null;
         running = false;
         if (netCallback != null) {
             try {
@@ -164,19 +183,57 @@ public final class SipRegistrationService extends Service {
         super.onDestroy();
     }
 
-    private void startInForeground() {
+    /**
+     * Promotes to a foreground service. Tries phoneCall|microphone first;
+     * on SecurityException (mic permission missing or background start, e.g.
+     * from the boot receiver) falls back to phoneCall only. Returns false if
+     * even that is rejected and the service cannot run at all.
+     */
+    private boolean startInForeground() {
         Notification n = buildNotification(false);
         try {
             if (Build.VERSION.SDK_INT >= 30) {
-                startForeground(NOTIF_ID, n,
-                        ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL
-                                | ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE);
-            } else {
-                startForeground(NOTIF_ID, n);
+                try {
+                    startForeground(NOTIF_ID, n,
+                            ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL
+                                    | ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE);
+                    return true;
+                } catch (Exception e) {
+                    Log.w(TAG, "microphone FGS unavailable, using phoneCall only", e);
+                    startForeground(NOTIF_ID, n,
+                            ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL);
+                    return true;
+                }
             }
+            startForeground(NOTIF_ID, n);
+            return true;
         } catch (Exception e) {
             Log.e(TAG, "startForeground failed", e);
-            stopSelf();
+            return false;
+        }
+    }
+
+    /**
+     * Re-promotes the running foreground service with microphone access once
+     * a call actually goes active (user just interacted, so while-in-use
+     * eligibility is satisfied). No-op when the service is not running or
+     * RECORD_AUDIO has not been granted yet.
+     */
+    public static void upgradeToMicrophone() {
+        SipRegistrationService s = instance;
+        if (s == null || Build.VERSION.SDK_INT < 30) return;
+        if (s.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)
+                != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            Log.w(TAG, "cannot add microphone FGS type: RECORD_AUDIO not granted");
+            return;
+        }
+        try {
+            s.startForeground(NOTIF_ID, s.buildNotification(true),
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL
+                            | ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE);
+            Log.i(TAG, "FGS re-promoted with microphone access");
+        } catch (Exception e) {
+            Log.w(TAG, "FGS microphone upgrade denied", e);
         }
     }
 
