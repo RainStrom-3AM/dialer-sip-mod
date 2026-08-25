@@ -232,14 +232,35 @@ public final class PjManager {
         Log.w(TAG, "registration wait timed out; placing call anyway");
     }
 
+    /** Runs on the pjsip thread only. Unregisters an account, tolerating a
+     *  REGISTER transaction already in flight (pjsua returns PJSIP_EBUSY):
+     *  retries briefly instead of letting the error abort the whole teardown
+     *  (which used to leak the account AND the Endpoint). */
+    private static void unregisterQuietly(Account acc) {
+        for (int i = 0; i < 20; i++) {
+            try {
+                acc.setRegistration(false);
+                return;
+            } catch (Exception e) {
+                Log.w(TAG, "unregister busy, retrying (" + i + "): " + e.getMessage());
+                try {
+                    Thread.sleep(100);
+                } catch (InterruptedException ie) {
+                    return;
+                }
+            }
+        }
+        Log.w(TAG, "unregister still busy after 2s; deleting anyway");
+    }
+
     /** Re-reads stored settings and re-registers (settings changed / network back). */
     public void reRegister() {
         handler.post(() -> {
             if (!started) return;
             try {
                 if (account != null) {
+                    unregisterQuietly(account);
                     try {
-                        account.setRegistration(false);
                         account.delete();
                     } catch (Exception e) {
                         Log.w(TAG, "old account teardown: " + e.getMessage());
@@ -258,8 +279,8 @@ public final class PjManager {
         handler.post(() -> {
             try {
                 if (account != null) {
+                    unregisterQuietly(account);
                     try {
-                        account.setRegistration(false);
                         account.delete();
                     } catch (Exception e) {
                         Log.w(TAG, "account delete: " + e.getMessage());
@@ -304,17 +325,27 @@ public final class PjManager {
         handler.post(() -> {
             try {
                 if (account != null) {
-                    account.setRegistration(false);
-                    account.delete();
+                    unregisterQuietly(account);
+                    try {
+                        account.delete();
+                    } catch (Exception e) {
+                        Log.w(TAG, "account delete: " + e.getMessage());
+                    }
                     account = null;
                 }
                 if (started && endpoint != null) {
-                    endpoint.libDestroy();
-                    endpoint.delete();
+                    try {
+                        endpoint.libDestroy();
+                    } catch (Exception e) {
+                        Log.w(TAG, "libDestroy: " + e.getMessage());
+                    }
+                    try {
+                        endpoint.delete();
+                    } catch (Exception e) {
+                        Log.w(TAG, "endpoint delete: " + e.getMessage());
+                    }
                     endpoint = null;
                 }
-            } catch (Exception e) {
-                Log.e(TAG, "shutdown failed", e);
             } finally {
                 started = false;
             }
